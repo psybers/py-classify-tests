@@ -35,7 +35,7 @@ class StoryConflict:
         self._sliced_states = sliced_states
         self._conflicting_actions = defaultdict(
             list
-        )  # {"action": ["story_1", ...], ...}
+        )
 
     def __hash__(self) -> int:
         return hash(str(list(self._sliced_states)))
@@ -69,14 +69,12 @@ class StoryConflict:
         return _get_previous_event(self._sliced_states[-1])[0] is not None
 
     def __str__(self) -> Text:
-        # Describe where the conflict occurs in the stories
         last_event_type, last_event_name = _get_previous_event(self._sliced_states[-1])
         if last_event_type:
             conflict_message = f"Story structure conflict after {last_event_type} '{last_event_name}':\n"
         else:
             conflict_message = "Story structure conflict at the beginning of stories:\n"
 
-        # List which stories are in conflict with one another
         for action, stories in self._conflicting_actions.items():
             conflict_message += (
                 f"  {self._summarize_conflicting_actions(action, stories)}"
@@ -96,7 +94,6 @@ class StoryConflict:
             A textural summary.
         """
         if len(stories) > 3:
-            # Four or more stories are present
             conflict_description = (
                 f"'{stories[0]}', '{stories[1]}', and {len(stories) - 2} other trackers"
             )
@@ -162,16 +159,10 @@ def find_story_conflicts(
 
     logger.info(f"Considering the preceding {max_history} turns for conflict analysis.")
 
-    # We do this in two steps, to reduce memory consumption:
-
-    # Create a 'state -> list of actions' dict, where the state is
-    # represented by its hash
     conflicting_state_action_mapping = _find_conflicting_states(
         trackers, domain, max_history
     )
 
-    # Iterate once more over all states and note the (unhashed) state,
-    # for which a conflict occurs
     conflicts = _build_conflicts_from_states(
         trackers, domain, max_history, conflicting_state_action_mapping
     )
@@ -192,15 +183,12 @@ def _find_conflicting_states(
     Returns:
         A dictionary mapping state-hashes to a list of actions that follow from each state.
     """
-    # Create a 'state -> list of actions' dict, where the state is
-    # represented by its hash
     state_action_mapping = defaultdict(list)
     for element in _sliced_states_iterator(trackers, domain, max_history):
         hashed_state = element.sliced_states_hash
         if element.event.as_story_string() not in state_action_mapping[hashed_state]:
             state_action_mapping[hashed_state] += [element.event.as_story_string()]
 
-    # Keep only conflicting `state_action_mapping`s
     return {
         state_hash: actions
         for (state_hash, actions) in state_action_mapping.items()
@@ -227,8 +215,6 @@ def _build_conflicts_from_states(
         A list of `StoryConflict` objects that describe inconsistencies in the story
         structure. These objects also contain the history that leads up to the conflict.
     """
-    # Iterate once more over all states and note the (unhashed) state,
-    # for which a conflict occurs
     conflicts = {}
     for element in _sliced_states_iterator(trackers, domain, max_history):
         hashed_state = element.sliced_states_hash
@@ -242,8 +228,6 @@ def _build_conflicts_from_states(
                 story_name=element.tracker.sender_id,
             )
 
-    # Return list of conflicts that arise from unpredictable actions
-    # (actions that start the conversation)
     return [
         conflict
         for (hashed_state, conflict) in conflicts.items()
@@ -302,19 +286,13 @@ def _get_previous_event(
     if not state:
         return previous_event_type, previous_event_name
 
-    # A typical state is, for example,
-    # `{'prev_action_listen': 1.0, 'intent_greet': 1.0, 'slot_cuisine_0': 1.0}`.
-    # We need to look out for `prev_` and `intent_` prefixes in the labels.
     for turn_label in state:
         if (
             turn_label.startswith(PREV_PREFIX)
             and turn_label.replace(PREV_PREFIX, "") != ACTION_LISTEN_NAME
         ):
-            # The `prev_...` was an action that was NOT `action_listen`
             return "action", turn_label.replace(PREV_PREFIX, "")
         elif turn_label.startswith(INTENT + "_"):
-            # We found an intent, but it is only the previous event if
-            # the `prev_...` was `prev_action_listen`, so we don't return.
             previous_event_type = "intent"
             previous_event_name = turn_label.replace(INTENT + "_", "")
 
