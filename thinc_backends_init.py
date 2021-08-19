@@ -17,15 +17,10 @@ from ..types import OpsNames
 context_ops: ContextVar[NumpyOps] = ContextVar("context_ops", default=NumpyOps())
 context_pools: ContextVar[dict] = ContextVar("context_pools", default={})
 
-# Internal use of thread-local storage only for detecting cases where a Jupyter
-# notebook might not have preserved contextvars across cells.
 _GLOBAL_STATE = {"ops": NumpyOps()}
 
 
-def set_gpu_allocator(allocator: str) -> None:  # pragma: no cover
-    """Route GPU memory allocation via PyTorch or tensorflow.
-    Raise an error if the given argument does not match either of the two.
-    """
+def set_gpu_allocator(allocator: str) -> None:
     if allocator == "pytorch":
         use_pytorch_for_gpu_memory()
     elif allocator == "tensorflow":
@@ -36,16 +31,7 @@ def set_gpu_allocator(allocator: str) -> None:  # pragma: no cover
         )
 
 
-def use_pytorch_for_gpu_memory() -> None:  # pragma: no cover
-    """Route GPU memory allocation via PyTorch.
-
-    This is recommended for using PyTorch and cupy together, as otherwise
-    OOM errors can occur when there's available memory sitting in the other
-    library's pool.
-
-    We'd like to support routing Tensorflow memory allocation via PyTorch as well
-    (or vice versa), but do not currently have an implementation for it.
-    """
+def use_pytorch_for_gpu_memory() -> None:
     import cupy.cuda
 
     assert_pytorch_installed()
@@ -55,16 +41,7 @@ def use_pytorch_for_gpu_memory() -> None:  # pragma: no cover
     cupy.cuda.set_allocator(pools["pytorch"].malloc)
 
 
-def use_tensorflow_for_gpu_memory() -> None:  # pragma: no cover
-    """Route GPU memory allocation via TensorFlow.
-
-    This is recommended for using TensorFlow and cupy together, as otherwise
-    OOM errors can occur when there's available memory sitting in the other
-    library's pool.
-
-    We'd like to support routing PyTorch memory allocation via Tensorflow as
-    well (or vice versa), but do not currently have an implementation for it.
-    """
+def use_tensorflow_for_gpu_memory() -> None:
     import cupy.cuda
 
     assert_tensorflow_installed()
@@ -75,7 +52,6 @@ def use_tensorflow_for_gpu_memory() -> None:  # pragma: no cover
 
 
 def get_ops(name: OpsNames, **kwargs) -> Ops:
-    """Get a backend object."""
     ops = {"numpy": NumpyOps, "cupy": CupyOps}
     if name not in ops:
         raise ValueError(f"Invalid backend: {name}")
@@ -84,7 +60,6 @@ def get_ops(name: OpsNames, **kwargs) -> Ops:
 
 
 def get_array_ops(arr):
-    """Return an Ops object to match the array's device and backend."""
     if is_cupy_array(arr):
         return CupyOps()
     else:
@@ -93,7 +68,6 @@ def get_array_ops(arr):
 
 @contextlib.contextmanager
 def use_ops(name: OpsNames, **kwargs):
-    """Change the backend to execute on for the scope of the block."""
     current_ops = get_current_ops()
     set_current_ops(get_ops(name, **kwargs))
     yield
@@ -101,12 +75,10 @@ def use_ops(name: OpsNames, **kwargs):
 
 
 def get_current_ops() -> Ops:
-    """Get the current backend object."""
     return context_ops.get()
 
 
 def set_current_ops(ops: Ops) -> None:
-    """Change the current backend object."""
     context_ops.set(ops)
     _get_thread_state().ops = ops
 
@@ -120,8 +92,6 @@ def contextvars_eq_thread_ops() -> bool:
 
 
 def _get_thread_state():
-    """Get a thread-specific state variable that inherits from a global
-    state when it's created."""
     thread: threading.Thread = threading.current_thread()
     if not hasattr(thread, "__local"):
         thread.__local = _create_thread_local(_GLOBAL_STATE)
